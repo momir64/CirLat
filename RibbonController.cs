@@ -23,18 +23,34 @@ namespace CirLat {
                     </customUI>";
 
         public void FindReplace(string[] find, string[] replace) {
-            bool selected = Globals.ThisAddIn.Application.ActiveDocument.ActiveWindow.Selection.Type == Word.WdSelectionType.wdSelectionNormal;
-            Word.Range range1 = selected ? Globals.ThisAddIn.Application.ActiveDocument.ActiveWindow.Selection.Range : Globals.ThisAddIn.Application.ActiveDocument.Content;
+            var app = Globals.ThisAddIn.Application;
+            var document = app.ActiveDocument;
+            var window = document.ActiveWindow;
+            var recorder = app.UndoRecord;
+            bool selected = window.Selection.Type == Word.WdSelectionType.wdSelectionNormal;
+            bool footnotes = !selected && document.Footnotes.Count > 0;
+            var range1 = selected ? window.Selection.Range : document.Content;
+            var range2 = footnotes ? document.Footnotes[1].Range : null;
+            recorder.StartCustomRecord("Preslovljavanje");
+            document.Bookmarks.Add("bugfix", document.Range(0, 0));
+            document.Bookmarks["bugfix"].Delete();
             range1.Find.ClearFormatting();
-            for (int i = 0; i < 63; i++)
-                range1.Find.Execute(FindText: find[i], ReplaceWith: replace[i], Replace: Word.WdReplace.wdReplaceAll, MatchCase: true);
-            if (!selected && Globals.ThisAddIn.Application.ActiveDocument.Footnotes.Count > 0) {
-                Word.Range range2 = Globals.ThisAddIn.Application.ActiveDocument.Footnotes[1].Range;
+            if (footnotes) {
                 range2.WholeStory();
                 range2.Find.ClearFormatting();
-                for (int i = 0; i < 63; i++)
-                    range2.Find.Execute(FindText: find[i], ReplaceWith: replace[i], Replace: Word.WdReplace.wdReplaceAll, MatchCase: true);
             }
+            var progress = new Progress((footnotes ? 2 : 1) * find.Length);
+            progress.Show();
+            for (int i = 0; i < find.Length; i++) {
+                range1.Find.Execute(FindText: find[i], ReplaceWith: replace[i], Replace: Word.WdReplace.wdReplaceAll, MatchCase: true);
+                progress.nextStep();
+                if (footnotes) {
+                    range2.Find.Execute(FindText: find[i], ReplaceWith: replace[i], Replace: Word.WdReplace.wdReplaceAll, MatchCase: true);
+                    progress.nextStep();
+                }
+            }
+            recorder.EndCustomRecord();
+            progress.Close();
         }
 
         public void ToCir(Microsoft.Office.Core.IRibbonControl control) => FindReplace(lat, cir);

@@ -1,4 +1,5 @@
-﻿using CirLat.Properties;
+﻿using System;
+using CirLat.Properties;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using Word = Microsoft.Office.Interop.Word;
@@ -29,8 +30,10 @@ namespace CirLat {
             var recorder = app.UndoRecord;
             bool selected = window.Selection.Type == Word.WdSelectionType.wdSelectionNormal;
             bool footnotes = !selected && document.Footnotes.Count > 0;
+            bool endnotes = !selected && document.Endnotes.Count > 0;
             var range1 = selected ? window.Selection.Range : document.Content;
             var range2 = footnotes ? document.Footnotes[1].Range : null;
+            var range3 = endnotes ? document.Endnotes[1].Range : null;
             recorder.StartCustomRecord("Preslovljavanje");
             document.Bookmarks.Add("bugfix", document.Range(0, 0));
             document.Bookmarks["bugfix"].Delete();
@@ -39,13 +42,21 @@ namespace CirLat {
                 range2.WholeStory();
                 range2.Find.ClearFormatting();
             }
-            var progress = new Progress((footnotes ? 2 : 1) * find.Length);
+            if (endnotes) {
+                range3.WholeStory();
+                range3.Find.ClearFormatting();
+            }
+            var progress = new Progress((Convert.ToInt32(footnotes) + Convert.ToInt32(endnotes) + 1) * find.Length);
             progress.Show();
             for (int i = 0; i < find.Length; i++) {
                 range1.Find.Execute(FindText: find[i], ReplaceWith: replace[i], Replace: Word.WdReplace.wdReplaceAll, MatchCase: true);
                 progress.nextStep();
                 if (footnotes) {
                     range2.Find.Execute(FindText: find[i], ReplaceWith: replace[i], Replace: Word.WdReplace.wdReplaceAll, MatchCase: true);
+                    progress.nextStep();
+                }
+                if (endnotes) {
+                    range3.Find.Execute(FindText: find[i], ReplaceWith: replace[i], Replace: Word.WdReplace.wdReplaceAll, MatchCase: true);
                     progress.nextStep();
                 }
             }
